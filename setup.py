@@ -1,5 +1,6 @@
 import re
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
 
 version = ""
 with open("trading_gym/__init__.py") as f:
@@ -21,12 +22,12 @@ with open("README.rst") as f:
     readme = f.read()
 
 setup(
-    name='trading_gym',
+    name="trading_gym",
     version=version,
     license="MIT",
-    description='A Gym environment for Stock market trading using Reinforcement Learning',
-    author='Sudip Roy',
-    author_email='sudiproy20yo@gmail.com',
+    description="A Gym environment for Stock market trading using Reinforcement Learning",
+    author="Sudip Roy",
+    author_email="sudiproy20yo@gmail.com",
     packages=find_packages(),
     install_requires=requirements,
     long_description=readme,

@@ -1,8 +1,9 @@
 import pandas as pd
 
+
 class Indicators:
     def __init__(self, data: pd.DataFrame):
-        self.close = data['Close']
+        self.close = data["Close"]
 
     def add_all(self, sma_period: int = 20, ema_period: int = 20, rsi_period: int = 14):
         """Adds all indicators to the data"""
@@ -11,11 +12,7 @@ class Indicators:
         rsi = self.rsi(rsi_period)
 
         # Return all the indicators into a single dataframe
-        return pd.DataFrame({
-            'SMA': sma,
-            'EMA': ema,
-            'RSI': rsi
-        })
+        return pd.DataFrame({"SMA": sma, "EMA": ema, "RSI": rsi})
 
     def sma(self, period: int) -> pd.Series:
         """Adds the simple moving average to the data
