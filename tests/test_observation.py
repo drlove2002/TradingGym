@@ -4,7 +4,6 @@ import pandas as pd
 ROOT_DIR = "/home/love/Documents/TradingGym/trading_gym"
 data_path = ROOT_DIR + "/data/reliance.csv"
 #%%
-#%%
 # Download data if not present
 if not os.path.exists(data_path):
     import yfinance as yf
@@ -26,7 +25,7 @@ env = StocksEnv(df=df, window_size=10)
 #%%
 env.step((0, 1))
 #%%
-env.step((1, 1))
+env.step((1, env._qtn))
 #%%
 env.step((0, 0))
 #%%

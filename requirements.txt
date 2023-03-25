@@ -1,1 +1,4 @@
-certifi @ file:///croot/certifi_1671487769961/work/certifi
+matplotlib==3.7.1
+numpy==1.24.2
+pandas==1.5.3
+gymnasium==0.27.1

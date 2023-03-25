@@ -10,7 +10,7 @@ repos:
     hooks:
       - id: autoflake
         name: Running autoflake in all files.
-        files: mainbot/
+        files: src/
         args:
           - --in-place
           - --remove-all-unused-imports
@@ -21,14 +21,14 @@ repos:
     hooks:
       - id: black
         name: Running black in all files.
-        files: mainbot/
+        files: src/
 
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0
     hooks:
       - id: isort
         name: Running isort in all files.
-        files: mainbot/
+        files: src/
         args: [--profile=black]
 
   - repo: https://github.com/PyCQA/flake8
@@ -36,7 +36,7 @@ repos:
     hooks:
       - id: flake8
         name: Running flake8 in all files.
-        files: mainbot/
+        files: src/
         args: [--config=.flake8]
 
   - repo: https://github.com/asottile/pyupgrade
@@ -44,5 +44,5 @@ repos:
     hooks:
     -   id: pyupgrade
         name: Running pyupgrade in all files.
-        files: mainbot/
-        args: [--py311-plus]
+        files: src/
+        args: [--py39-plus]
