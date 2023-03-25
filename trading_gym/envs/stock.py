@@ -37,7 +37,6 @@ class StocksEnv(gym.Env):
         self.max_shares = max_shares
         self._process_data(indicator_factory or Indicators(self.df))
 
-        self.shape = (window_size, len(df.columns))
         self.action_space = spaces.Tuple(
             (
                 spaces.Discrete(len(Action)),  # Buy, Sell, or Hold
@@ -48,9 +47,7 @@ class StocksEnv(gym.Env):
             {
                 "balance": spaces.Box(low=-INF, high=INF, shape=(1,), dtype=np.float64),
                 "equity": spaces.Box(low=0, high=INF, shape=(1,), dtype=np.uint32),
-                "features": spaces.Box(
-                    low=0, high=INF, shape=self.shape, dtype=np.float64
-                ),
+                "features": spaces.Box(low=0, high=INF, shape=(8,), dtype=np.float64),
             }
         )
 
@@ -107,7 +104,7 @@ class StocksEnv(gym.Env):
             "balance": np.array([self._balance]),
             "equity": np.array([self._equity]),
             "quantity": np.array([self._qtn]),
-            "features": self._features.values,
+            "features": self._features.iloc[-1].values,
         }
 
     @property
@@ -143,7 +140,7 @@ class StocksEnv(gym.Env):
         # Using a risk-free rate of 5% and calculating based on 252 trading days
         return ((return_mean * 252) - 0.05) / (return_std * np.sqrt(252))
 
-    def _get_reward(self, action: Action, cost: float, fee: float) -> float:
+    def _get_reward(self, action: Action, fee: float) -> float:
         """Get the reward for the current tick"""
         reward = 0.0
         # Keep track of the history of portfolio values
@@ -186,7 +183,7 @@ class StocksEnv(gym.Env):
         ):
             self._done = True
 
-        reward = self._get_reward(action_type, cost, fee)
+        reward = self._get_reward(action_type, fee)
         observation = self._obs
         info = self._info
 
