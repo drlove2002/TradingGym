@@ -30,14 +30,17 @@ import numpy as np
 # Get observation space as a 1d array also flatten the dict
 np.concatenate(list(env.observation_space.sample().values()))
 # %%
-env.step((0, 2))
+env.step(0)
 # %%
-env.step((1, env._qtn))
+env.step(1)
 # %%
-env.step((2, 0))
+env.step(2)
 # %%
 env.render()
 # %%
 env.reset()
 # %%
 env.close()
+# TODO : Fix reward calculation
+# TODO : Add video recording after every episode
+# TODO : Add plotting of entire stock data with buy and sell points

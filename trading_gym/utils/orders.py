@@ -16,6 +16,7 @@ class OrderHandler:
         self.conn = sql.connect("trading_gym/data/orders.db")
         self.positions = 0
         self._latest_sell_date: str = ""
+        self.latest_order: tuple[int, int, float, datetime, int, float] | None = None
         self._init_db()
 
     def _init_db(self):
@@ -96,9 +97,7 @@ class OrderHandler:
             return 0.0
         return res[0]
 
-    def add(
-        self, action: Action, price: float, date: datetime, quantity: int = 0
-    ) -> tuple[float, float]:
+    def add(self, action: Action, price: float, date: datetime) -> tuple[float, float]:
         """Add an order
         Parameters
         ----------
@@ -108,28 +107,54 @@ class OrderHandler:
             The price of the order
         date : datetime
             The date of the order
-        quantity : int, optional
-            The quantity of the order, by default 0
         Returns
         -------
             tuple(float, float)
                 The total cost and the total tax
         """
-        fee = self.calc_tax(price, quantity, action)
+        if (
+            action != Action.HOLD
+            and self.latest_order
+            and self.latest_order[1] == action
+        ):
+            fee = self.calc_tax(price, self.latest_order[4] + 1, action)
+            with self.conn:
+                cur = self.conn.cursor()
+                cur.execute(
+                    """
+                    UPDATE orders
+                    SET quantity = quantity + 1, trade_fee = ?
+                    WHERE id = ?""",
+                    (self.latest_order[0], fee),
+                )
+                self.latest_order = (
+                    cur.lastrowid,
+                    action,
+                    price,
+                    date,
+                    self.latest_order[4] + 1,
+                    fee,
+                )
+        else:
+            fee = self.calc_tax(price, 1, action)
+            with self.conn:
+                cur = self.conn.cursor()
+                cur.execute(
+                    """
+                    INSERT INTO orders (action, price, date, quantity, trade_fee)
+                    VALUES (?, ?, ?, ?, ?)""",
+                    (int(action), price, date.date().isoformat(), 1, fee),
+                )
+                self.latest_order = cur.lastrowid, action, price, date, 1, fee
+
         if action == Action.BUY:
-            self.positions += quantity
+            self.positions += 1
         elif action == Action.SELL:
-            self.positions -= quantity
+            self.positions -= 1
             self._latest_sell_date = date.date().isoformat()
-        with self.conn:
-            cur = self.conn.cursor()
-            cur.execute(
-                """
-                INSERT INTO orders (action, price, date, quantity, trade_fee)
-                VALUES (?, ?, ?, ?, ?)""",
-                (int(action), price, date.date().isoformat(), quantity, fee),
-            )
-        cost_without_fee = price * quantity * (1 if action == Action.BUY else -1)
+        cost_without_fee = (
+            price * self.latest_order[4] * (1 if action == Action.BUY else -1)
+        )
 
         return cost_without_fee, fee
 

@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Literal
+from typing import Literal, Optional
 
 import gymnasium as gym
 import matplotlib.pyplot as plt
@@ -37,12 +37,7 @@ class StocksEnv(gym.Env):
         self.max_shares = max_shares
         self._process_data(indicator_factory or Indicators(self.df))
 
-        self.action_space = spaces.Tuple(
-            (
-                spaces.Discrete(len(Action)),  # Buy, Sell, or Hold
-                spaces.Box(low=0, high=1000, shape=(1,), dtype=np.uint),  # Quantity
-            )
-        )
+        self.action_space = spaces.Discrete(len(Action))  # Buy, Sell, or Hold
         self.observation_space = spaces.Dict(
             {
                 "balance": spaces.Box(low=-INF, high=INF, shape=(1,), dtype=np.float64),
@@ -54,9 +49,9 @@ class StocksEnv(gym.Env):
         # episode
         self._orders = OrderHandler()
         self._balance = 10_000.0
+        self._last_balance = 10_000.0
         self._total_reward = 0.0
         self._num_trades = 0
-        self._last_sharpen_ratio = 0.0
         self._start_tick = self.window_size
         self._end_tick = len(self.df) - 1
         self._done = False
@@ -112,7 +107,6 @@ class StocksEnv(gym.Env):
         """Get the info"""
         return {
             "total_reward": self._total_reward,
-            "last_sharpen_ratio": self._last_sharpen_ratio,
             "num_trades": self._num_trades,
         }
 
@@ -127,18 +121,18 @@ class StocksEnv(gym.Env):
         return self.df.index[self._current_tick]
 
     @property
-    def _sharpe_ratio(self):
-        # Check if we have enough data to calculate the Sharpe ratio
-        if len(self._portfolio_values) < self.window_size:
-            return 0.0
-        # Calculate the return ratio based on rolling window of returns
-        rolling_returns = (
-            np.diff(self._portfolio_values) / np.array(self._portfolio_values)[:-1]
-        )
-        return_mean, return_std = np.mean(rolling_returns), np.std(rolling_returns)
+    def _last_action(self) -> Optional[int]:
+        """Get the last order action"""
+        if self._orders.latest_order:
+            return self._orders.latest_order[1]
+        return None
 
-        # Using a risk-free rate of 5% and calculating based on 252 trading days
-        return ((return_mean * 252) - 0.05) / (return_std * np.sqrt(252))
+    @property
+    def _last_qtn(self) -> Optional[int]:
+        """Get the last order quantity"""
+        if self._orders.latest_order:
+            return self._orders.latest_order[4]
+        return None
 
     def _get_reward(self, action: Action, fee: float) -> float:
         """Get the reward for the current tick"""
@@ -148,7 +142,7 @@ class StocksEnv(gym.Env):
         self._portfolio_values.append(current_value)
         if action == Action.SELL:
             reward += self._orders.latest_profit
-        else:
+        elif action == Action.BUY:
             reward -= fee
 
         # Penalize unnecessary trades TODO: Will think about trade penalty later
@@ -157,37 +151,38 @@ class StocksEnv(gym.Env):
         # if self._num_trades > 10:
         #     reward += -(0.1 * self._num_trades)
 
-        # TODO: Will think about sharp ratio later
-        # sharpe_ratio = self._sharpe_ratio
-        # reward -= (0.1 * (sharpe_ratio - self._last_sharpen_ratio))
-
         # Update the env variables
         self._total_reward += reward
-        # self._last_sharpen_ratio = sharpe_ratio
         self._total_reward_history.append(self._total_reward)
 
         return reward
 
     def step(self, action):
-        # Unpack the action tuple
-        action_type, quantity = action if isinstance(action, tuple) else (action, 1)
-        cost, fee = self._orders.add(
-            action_type, self._current_price, self._current_date, quantity
-        )
+        """Take a step in the environment"""
+        last_action = self._last_action
+        # Get the trade cost and fee
+        cost, fee = self._orders.add(action, self._current_price, self._current_date)
         total_cost = round(cost + fee, 2)
-        if action_type != Action.HOLD:
-            self._balance -= total_cost
+        if action != Action.HOLD:
+            # We are increasing the quantity for the last trade
+            if last_action == action:
+                self._balance = self._last_balance - total_cost
+            else:
+                # We are making a new trade on a new day
+                self._last_balance = self._balance
+                self._balance -= total_cost
 
+        # Check if we are done
         if (self._balance <= 0 and self._equity <= 0) or (
             self._current_tick >= self._end_tick
         ):
             self._done = True
 
-        reward = self._get_reward(action_type, fee)
+        reward = self._get_reward(action, fee)
         observation = self._obs
         info = self._info
 
-        if self._current_tick < self._end_tick:
+        if self._current_tick < self._end_tick and action == Action.HOLD:
             # Move to the next tick
             self._current_tick += 1
 
@@ -197,10 +192,9 @@ class StocksEnv(gym.Env):
         """Reset the environment data and state"""
         super().reset(seed=seed, options=options)
 
-        self._balance = 10_000.0
+        self._balance = self._last_balance = 10_000.0
         self._total_reward = 0.0
         self._num_trades = 0
-        self._last_sharpen_ratio = 0.0
         self._done = False
         self._current_tick = self._start_tick
         self._portfolio_values.extend([self._balance] * self.window_size)
@@ -306,14 +300,17 @@ class StocksEnv(gym.Env):
     def legal_actions(self):
         """Get the legal actions for the current tick"""
         actions = []
-        if self._balance > 0:
-            actions.append(
-                (Action.BUY, min(self.max_shares, self._balance // self._current_price))
-            )  # Buy action
-        if self._qtn > 0:
-            actions.append(
-                (Action.SELL, min(self.max_shares, self._qtn))
-            )  # Sell action
+        if (
+            self._balance > 0
+            and self._last_action != Action.SELL
+            and min(self.max_shares, self._balance // self._current_price) > 0
+        ):  # Buy action
+            actions.append(int(Action.BUY))
+
+        if self._qtn > 0 and self._last_action != Action.BUY:
+            # Sell action
+            actions.append(int(Action.SELL))
+
         actions.append((Action.HOLD, 0))  # Hold action
         return actions
 

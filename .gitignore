@@ -114,3 +114,6 @@ dmypy.json
 *~
 *.swp
 *.swo
+
+# db files
+*.db
