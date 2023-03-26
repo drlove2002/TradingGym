@@ -41,6 +41,4 @@ env.render()
 env.reset()
 # %%
 env.close()
-# TODO : Fix reward calculation
-# TODO : Add video recording after every episode
 # TODO : Add plotting of entire stock data with buy and sell points

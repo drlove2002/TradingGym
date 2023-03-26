@@ -115,6 +115,6 @@ dmypy.json
 *.swp
 *.swo
 
-# db files
+# unwanted data files
 /trading_gym/data/*.db
-*.db
+/trading_gym/data/*.mp4

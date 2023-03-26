@@ -1,4 +1,5 @@
 from collections import deque
+from concurrent import futures
 from typing import Literal, Optional
 
 import gymnasium as gym
@@ -33,6 +34,7 @@ class StocksEnv(gym.Env):
         """
         super().__init__()
         self.df = df
+        self._executor = futures.ThreadPoolExecutor(max_workers=4)
         self.window_size = window_size
         self.max_shares = max_shares
         self._process_data(indicator_factory or Indicators(self.df))
@@ -59,6 +61,8 @@ class StocksEnv(gym.Env):
         self._portfolio_values = deque(
             [self._balance + self._equity] * window_size, maxlen=window_size
         )
+        self._plots: list[plt.Figure] = []
+        self._draw_plot()
 
     def _process_data(self, indicators: Indicators):
         """Process the data"""
@@ -173,6 +177,7 @@ class StocksEnv(gym.Env):
         reward = self._get_reward(action, fee)
         observation = self._obs
         info = self._info
+        self._executor.submit(self._draw_plot)
 
         if self._current_tick < self._end_tick and action == Action.HOLD:
             # Move to the next tick
@@ -184,12 +189,15 @@ class StocksEnv(gym.Env):
         """Reset the environment data and state"""
         super().reset(seed=seed, options=options)
 
+        self._executor.submit(self._export_plot2vid)
         self._balance = self._last_balance = 10_000.0
         self._total_reward = 0.0
         self._done = False
         self._current_tick = self._start_tick
         self._portfolio_values.extend([self._balance] * self.window_size)
         self._total_reward_history.extend([0.0] * self.window_size)
+        self._plots.clear()
+        self._draw_plot()
         self._orders.reset()
 
         observation = self._obs
@@ -198,6 +206,10 @@ class StocksEnv(gym.Env):
 
     def render(self, mode="human"):
         """Render the stock chart with the current position"""
+        self._plots[-1].show()
+
+    def _draw_plot(self):
+        """Draw the plot of the stock chart with the current position"""
         df_chunk: pd.DataFrame = self._features
 
         # Create a function to color the candlesticks based on their direction
@@ -279,7 +291,38 @@ class StocksEnv(gym.Env):
             rotation=45,
         )
         fig.tight_layout()
-        plt.show()
+        # Adjust all fig spacing to 0
+        fig.subplots_adjust(hspace=0, wspace=0)
+        # Add the plot to the env list
+        self._plots.append(plt.gcf())
+
+    def _export_plot2vid(self):
+        """Export the plots to a video"""
+        if not self._plots:
+            return
+        import matplotlib.animation as animation
+
+        def plot2image(plot: plt.Figure) -> np.ndarray:
+            plot.canvas.draw()
+            # extract the image data from the plot object
+            w, h = plot.canvas.get_width_height()
+            return np.frombuffer(plot.canvas.tostring_rgb(), dtype=np.uint8).reshape(
+                (h, w, 3)
+            )
+
+        # create a writer object that outputs to a BytesIO buffer
+        writer = animation.FFMpegWriter(fps=2, extra_args=["-threads", "4"])
+        # Save the video to a file
+        with writer.saving(
+            plt.figure(figsize=self._plots[0].get_size_inches()),
+            "trading_gym/data/animation.mp4",
+            dpi=100,
+        ):
+            # iterate over the list of plots and add them to the animation
+            for p in self._plots:
+                plt.clf()
+                plt.gca().imshow(plot2image(p))
+                writer.grab_frame()
 
     def close(self):
         """Close the environment"""
