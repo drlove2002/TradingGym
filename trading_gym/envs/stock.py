@@ -51,7 +51,6 @@ class StocksEnv(gym.Env):
         self._balance = 10_000.0
         self._last_balance = 10_000.0
         self._total_reward = 0.0
-        self._num_trades = 0
         self._start_tick = self.window_size
         self._end_tick = len(self.df) - 1
         self._done = False
@@ -107,7 +106,6 @@ class StocksEnv(gym.Env):
         """Get the info"""
         return {
             "total_reward": self._total_reward,
-            "num_trades": self._num_trades,
         }
 
     @property
@@ -144,12 +142,6 @@ class StocksEnv(gym.Env):
             reward += self._orders.latest_profit
         elif action == Action.BUY:
             reward -= fee
-
-        # Penalize unnecessary trades TODO: Will think about trade penalty later
-        # if action != Action.HOLD:
-        #     self._num_trades += 1
-        # if self._num_trades > 10:
-        #     reward += -(0.1 * self._num_trades)
 
         # Update the env variables
         self._total_reward += reward
@@ -194,7 +186,6 @@ class StocksEnv(gym.Env):
 
         self._balance = self._last_balance = 10_000.0
         self._total_reward = 0.0
-        self._num_trades = 0
         self._done = False
         self._current_tick = self._start_tick
         self._portfolio_values.extend([self._balance] * self.window_size)

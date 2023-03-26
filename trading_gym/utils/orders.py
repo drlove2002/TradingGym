@@ -124,8 +124,8 @@ class OrderHandler:
                     """
                     UPDATE orders
                     SET quantity = quantity + 1, trade_fee = ?
-                    WHERE id = ?""",
-                    (self.latest_order[0], fee),
+                    WHERE id = ?;""",
+                    (fee, self.latest_order[0]),
                 )
                 self.latest_order = (
                     cur.lastrowid,

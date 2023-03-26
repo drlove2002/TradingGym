@@ -116,4 +116,5 @@ dmypy.json
 *.swo
 
 # db files
+/trading_gym/data/*.db
 *.db
