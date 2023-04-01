@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 
 ROOT_DIR = "/home/love/Documents/TradingGym/trading_gym"
 data_path = ROOT_DIR + "/data/reliance.csv"
@@ -20,25 +21,38 @@ if not os.path.exists(data_path):
 else:
     df = pd.read_csv(data_path, index_col=0, parse_dates=True)
 # %%
-from trading_gym.envs.stock import StocksEnv
-
-env = StocksEnv(df=df, window_size=10)
+from trading_gym.envs.stock import StocksEnv, Action
+env = StocksEnv(df=df, max_shares=100, video_path="trading_gym/data/animation.mp4")
 # %%
-env.observation_space.sample()
+# while env._done is False:
+#     action = np.random.choice(env.legal_actions())
+#     env.step(action)
+step = env.step(1)
+legal = env.legal_actions()
 # %%
-import numpy as np
-# Get observation space as a 1d array also flatten the dict
-np.concatenate(list(env.observation_space.sample().values()))
-# %%
-env.step(0)
-# %%
-env.step(1)
-# %%
-env.step(2)
-# %%
-env.render()
+env._plots[3].show()
+# for p in env._plots:
+#     p.show()
 # %%
 env.reset()
 # %%
 env.close()
-# TODO : Add plotting of entire stock data with buy and sell points
+# %%
+env._orders.reset()
+# %%
+chunk_size = 4
+chunks = [env.df.iloc[i:i + len(env.df) // chunk_size] for i in range(0, len(env.df), len(env.df) // chunk_size)]
+for chunk in chunks:
+    start_row = chunk.index[0]
+    end_row = chunk.index[-1]
+    start_idx = env.df.index.get_loc(start_row)
+    end_idx = env.df.index.get_loc(end_row)
+    # Return when chunk is too small
+    if end_idx - start_idx < 10:
+        continue
+    portfolio_values_chunk = env._portfolio_values[start_idx:end_idx+1]
+    reward_chunk = env._total_reward_history[start_idx:end_idx+1]
+    env._draw_plot(chunk, portfolio_values_chunk, reward_chunk)
+# TODO: Bug in selling amd buying price and profit calculation
+# TODO: Fix reward calculation
+# TODO: Find a way to save the plots in folders so that we can make animation
