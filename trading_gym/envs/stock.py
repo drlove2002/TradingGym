@@ -284,27 +284,29 @@ class StocksEnv(gym.Env):
         # get high value for buy orders and low value for sell orders and nan if no order
         if buy_orders.shape[0]:
             # Get those buy orders which are not in the current chunk
-            buy_orders = df.loc[buy_orders, "High"].reindex(df.index).values
+            buy_orders = df.loc[buy_orders, "Low"].reindex(df.index).values * 0.99
             plot_data.append(
                 mpf.make_addplot(
                     buy_orders,
                     type="scatter",
                     marker="^",
-                    markersize=200,
+                    markersize=100,
                     color="green",
                     panel=0,
+                    alpha=0.5,
                 )
             )
         if sell_orders.shape[0]:
-            sell_orders = df.loc[sell_orders, "High"].reindex(df.index).values
+            sell_orders = df.loc[sell_orders, "High"].reindex(df.index).values * 1.01
             plot_data.append(
                 mpf.make_addplot(
                     sell_orders,
                     type="scatter",
                     marker="v",
-                    markersize=200,
+                    markersize=100,
                     color="red",
                     panel=0,
+                    alpha=0.5,
                 )
             )
 
