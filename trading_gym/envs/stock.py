@@ -1,3 +1,4 @@
+from concurrent import futures
 from typing import Literal, Optional
 
 import gymnasium as gym
@@ -36,6 +37,7 @@ class StocksEnv(gym.Env):
         self.df = df
         self.max_shares = max_shares
         self._process_data()
+        self._thread_pool = futures.ThreadPoolExecutor(max_workers=4)
         self.plot_every = plot_every  # plot every n episodes
         self.video_path = video_path
 
@@ -187,8 +189,6 @@ class StocksEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         """Reset the environment data and state"""
-        # if self._episode % self.plot_every == 0:
-        #     self._draw_plot()  TODO: fix this
         super().reset(seed=seed, options=options)
 
         self._episode += 1
@@ -207,7 +207,47 @@ class StocksEnv(gym.Env):
 
     def render(self, mode="human"):
         """Render the stock chart with the current position"""
-        self._plots[-1].show()
+        if mode != "human":
+            return
+
+        if not self._done:
+            df = self.df.iloc[: self._current_tick]
+            portfolio = self._portfolio_values[: self._current_tick]
+            rewards = self._total_reward_history[: self._current_tick]
+        else:
+            df = self.df
+            portfolio = self._portfolio_values
+            rewards = self._total_reward_history
+        chunk_size = len(df) // 200
+        chunks = [
+            df.iloc[i : i + len(df) // chunk_size]
+            for i in range(0, len(df), len(df) // chunk_size)
+        ]
+        futs = []
+        for chunk in chunks:
+            start_row = chunk.index[0]
+            end_row = chunk.index[-1]
+            start_idx = df.index.get_loc(start_row)
+            end_idx = df.index.get_loc(end_row)
+            # Return when chunk is too small
+            if end_idx - start_idx < 10:
+                continue
+            portfolio_values_chunk = portfolio[start_idx : end_idx + 1]
+            reward_chunk = rewards[start_idx : end_idx + 1]
+            # self._draw_plot(chunk, portfolio_values_chunk, reward_chunk)
+            futs.append(
+                self._thread_pool.submit(
+                    self._draw_plot, chunk, portfolio_values_chunk, reward_chunk
+                )
+            )
+
+        # Wait for all plots to be drawn
+        for fut in futs:
+            fut.result()
+
+        # Render the plot
+        for p in self._plots:
+            p.show()
 
     def _draw_plot(
         self, df: pd.DataFrame, portfolio_chunk: np.ndarray, reward_chunk: np.ndarray
@@ -312,7 +352,6 @@ class StocksEnv(gym.Env):
     def close(self):
         """Close the environment"""
         self.reset()
-        self._export_plot2vid()
         self._done = True
         self.df = None
         self._orders.conn.close()

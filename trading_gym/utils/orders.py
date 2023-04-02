@@ -16,13 +16,21 @@ class OrderHandler:
     """Order handler to keep track of past orders"""
 
     def __init__(self):
-        self.conn = sql.connect("trading_gym/data/orders.db")
+        self.conn: sql.Connection | None = None
         self.positions = 0
         self._latest_sell_date: str = ""
         self.latest_order: tuple[datetime, int, float, int, float] | None = None
         self._init_db()
 
     def _init_db(self):
+        # Create a connection pool with 5 connections
+        self.conn = sql.connect(
+            "trading_gym/data/orders.db",
+            check_same_thread=False,
+            isolation_level=None,
+            timeout=30.0,
+        )
+
         cur = self.conn.cursor()
         # Check if the table exists or not
         cur.execute(
@@ -34,7 +42,7 @@ class OrderHandler:
         res = cur.fetchone()
         if res is None:
             # Create the table
-            cur.execute(
+            cur.executescript(
                 """
                 CREATE TABLE orders
                 (date TEXT PRIMARY KEY,
@@ -42,9 +50,10 @@ class OrderHandler:
                 price REAL NOT NULL,
                 quantity INTEGER NOT NULL,
                 trade_fee REAL NOT NULL);
-            """
+                ----------------------------
+                CREATE INDEX idx_orders_action ON orders(action);
+                """
             )
-            cur.execute("CREATE INDEX idx_orders_action ON orders(action);")
         cur.close()
 
     @property
@@ -221,5 +230,5 @@ class OrderHandler:
     def reset(self):
         """Reset the orders"""
         with self.conn:
-            self.conn.cursor().execute("DELETE FROM orders")
+            self.conn.cursor().execute("DELETE FROM orders WHERE 1")
         self.positions = 0
