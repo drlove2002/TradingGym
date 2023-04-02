@@ -54,7 +54,8 @@ class StocksEnv(gym.Env):
         self._episode = 0
         self._plots: list[plt.Figure] = []
         self._orders = OrderHandler()
-        self._balance = self._last_balance = initial_balance
+        self._init_balance = initial_balance
+        self._balance = self._last_balance = self._init_balance
         self._total_reward = 0.0
         self._start_tick = 0
         self._end_tick = len(self.df) - 1
@@ -137,15 +138,18 @@ class StocksEnv(gym.Env):
 
     def _get_reward(self, action: Action, fee: float) -> float:
         """Get the reward for the current tick"""
-        reward = 0.0
+        reward = 1e-5
         # Keep track of the history of portfolio values
         current_value = self._balance + self._equity
         self._portfolio_values[self._current_tick] = current_value
         if action == Action.SELL:
-            reward += self._orders.latest_profit / self._current_price
+            reward += self._orders.latest_profit / (self._current_price * 100)
         elif action == Action.BUY:
-            reward -= fee / self._current_price
+            reward -= fee / (self._current_price * 100)
 
+        if reward < 0:
+            # Penalize the agent for selling at a loss
+            reward *= 0.5
         # Update the env variables
         self._total_reward += reward
         if (
@@ -159,8 +163,8 @@ class StocksEnv(gym.Env):
 
     def step(self, action):
         """Take a step in the environment"""
-        # Check if we are done
-        if (self._balance <= 0 and self._equity <= 0) or (
+        # We are done if we blow up our balance by 50% or if we reach the end of the data
+        if ((self._balance <= (self._init_balance * 0.5)) and (self._equity <= 0)) or (
             self._current_tick >= self._end_tick
         ):
             self._done = True
@@ -192,7 +196,7 @@ class StocksEnv(gym.Env):
         super().reset(seed=seed, options=options)
 
         self._episode += 1
-        self._balance = self._last_balance = 10_000.0
+        self._balance = self._last_balance = self._init_balance
         self._total_reward = 0.0
         self._done = False
         self._current_tick = self._start_tick

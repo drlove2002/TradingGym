@@ -37,5 +37,4 @@ env.close()
 env._orders.reset()
 # %%
 env.render()
-# TODO: Bug in selling amd buying price and profit calculation
-# TODO: Fix reward calculation
+# TODO: Bug in selling and buying price and profit calculation
