@@ -26,8 +26,6 @@ class StocksEnv(gym.Env):
         *,
         max_shares: int = 1000,
         initial_balance: float = 10_000.0,
-        plot_every: int = 100,
-        video_path: Optional[str] = "~/Downloads/trading_gym.mp4",
     ):
         """
         Stock trading environment
@@ -38,8 +36,6 @@ class StocksEnv(gym.Env):
         self.max_shares = max_shares
         self._process_data()
         self._thread_pool = futures.ThreadPoolExecutor(max_workers=4)
-        self.plot_every = plot_every  # plot every n episodes
-        self.video_path = video_path
 
         self.action_space = spaces.Discrete(len(Action))  # Buy, Sell, or Hold
         self.observation_space = spaces.Dict(
@@ -323,36 +319,6 @@ class StocksEnv(gym.Env):
 
         self._plots.append(fig)
         logger.info("Plot drawn for episode %s", self._episode)
-
-    def _export_plot2vid(self):
-        """Export the plots to a video"""
-        if not self._plots:
-            logger.info("No plots to export")
-            return
-        import matplotlib.animation as animation
-
-        def plot2image(plot: plt.Figure) -> np.ndarray:
-            plot.canvas.draw()
-            # extract the image data from the plot object
-            w, h = plot.canvas.get_width_height()
-            return np.frombuffer(plot.canvas.tostring_rgb(), dtype=np.uint8).reshape(
-                (h, w, 3)
-            )
-
-        # create a writer object that outputs to a BytesIO buffer
-        writer = animation.FFMpegWriter(fps=2, extra_args=["-threads", "4"])
-        # Save the video to a file
-        with writer.saving(
-            plt.figure(figsize=self._plots[0].get_size_inches()),
-            self.video_path,
-            dpi=100,
-        ):
-            # iterate over the list of plots and add them to the animation
-            for p in self._plots:
-                plt.clf()
-                plt.gca().imshow(plot2image(p))
-                writer.grab_frame()
-        logger.info("Video exported to %s", self.video_path)
 
     def close(self):
         """Close the environment"""
