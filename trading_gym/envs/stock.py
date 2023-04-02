@@ -222,7 +222,7 @@ class StocksEnv(gym.Env):
             df = self.df
             portfolio = self._portfolio_values
             rewards = self._total_reward_history
-        chunk_size = len(df) // 200
+        chunk_size = len(df) // 180
         chunks = [
             df.iloc[i : i + len(df) // chunk_size]
             for i in range(0, len(df), len(df) // chunk_size)
@@ -238,7 +238,6 @@ class StocksEnv(gym.Env):
                 continue
             portfolio_values_chunk = portfolio[start_idx : end_idx + 1]
             reward_chunk = rewards[start_idx : end_idx + 1]
-            # self._draw_plot(chunk, portfolio_values_chunk, reward_chunk)
             futs.append(
                 self._thread_pool.submit(
                     self._draw_plot, chunk, portfolio_values_chunk, reward_chunk
