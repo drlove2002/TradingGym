@@ -11,10 +11,10 @@ from gymnasium import register
 
 from trading_gym.data import RELIANCE
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 register(
     id="stocks-v0",
     entry_point="trading_gym.envs:StocksEnv",
-    kwargs={"df": deepcopy(RELIANCE), "window_size": 10},
+    kwargs={"df": deepcopy(RELIANCE)},
 )

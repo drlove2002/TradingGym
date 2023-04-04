@@ -30,7 +30,7 @@ class OrderHandler:
     def _init_db(self):
         # Create a connection pool with 5 connections
         self.conn = sql.connect(
-            "trading_gym/data/orders.db",
+            ":memory:",
             check_same_thread=False,
             isolation_level=None,
             timeout=30.0,

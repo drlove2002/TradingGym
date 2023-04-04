@@ -7,18 +7,16 @@ import mplfinance as mpf
 import numpy as np
 import pandas as pd
 from gymnasium import spaces
-from pandas.plotting import register_matplotlib_converters
 
 from ..type import Action
 from ..utils import Indicators, OrderHandler, get_logger
 
 logger = get_logger(__name__)
-register_matplotlib_converters()
 INF = 1e10
 
 
 class StocksEnv(gym.Env):
-    metadata = {"render.modes": ["human"]}
+    metadata = {"render_modes": ["human"], "render_fps": 1, "render_title": "StocksEnv"}
 
     def __init__(
         self,
@@ -41,7 +39,8 @@ class StocksEnv(gym.Env):
         self.observation_space = spaces.Dict(
             {
                 "balance": spaces.Box(low=-INF, high=INF, shape=(1,), dtype=np.float64),
-                "equity": spaces.Box(low=0, high=INF, shape=(1,), dtype=np.uint32),
+                "equity": spaces.Box(low=0, high=INF, shape=(1,), dtype=np.float64),
+                "quantity": spaces.Box(low=0, high=INF, shape=(1,), dtype=np.uint32),
                 "features": spaces.Box(low=0, high=INF, shape=(8,), dtype=np.float64),
             }
         )
@@ -87,7 +86,7 @@ class StocksEnv(gym.Env):
     def _equity(self) -> float:
         """Get the current equity. The unrealized profit"""
         if self._qtn == 0 or self._done:
-            return 0
+            return 0.0
         tax = self._orders.calc_tax(self._current_price, self._qtn, Action.SELL)
         return (self._qtn * self._current_price) - tax
 
@@ -97,7 +96,7 @@ class StocksEnv(gym.Env):
         return {
             "balance": np.array([self._balance]),
             "equity": np.array([self._equity]),
-            "quantity": np.array([self._qtn]),
+            "quantity": np.array([self._qtn], dtype=np.uint32),
             "features": self.df.iloc[self._current_tick].to_numpy(),
         }
 
@@ -156,9 +155,7 @@ class StocksEnv(gym.Env):
     def step(self, action):
         """Take a step in the environment"""
         # We are done if we blow up our balance by 50% or if we reach the end of the data
-        if ((self._balance <= (self._init_balance * 0.5)) and (self._equity <= 0)) or (
-            self._current_tick >= self._end_tick
-        ):
+        if (self._balance <= (self._init_balance * 0.5)) and (self._equity <= 0):
             self._done = True
 
         last_action = (
@@ -184,7 +181,13 @@ class StocksEnv(gym.Env):
             # Move to the next tick
             self._current_tick += 1
 
-        return observation, reward, self._done, info
+        return (
+            observation,
+            reward,
+            self._current_tick >= self._end_tick,
+            self._done,
+            info,
+        )
 
     def reset(self, seed=None, options=None):
         """Reset the environment data and state"""
@@ -245,7 +248,7 @@ class StocksEnv(gym.Env):
 
         # Render the plot
         for p in self._plots:
-            p.show()
+            p.show(warn=False)
 
     def _draw_plot(
         self, df: pd.DataFrame, portfolio_chunk: np.ndarray, reward_chunk: np.ndarray
