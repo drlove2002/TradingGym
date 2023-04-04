@@ -22,11 +22,13 @@ else:
     df = pd.read_csv(data_path, index_col=0, parse_dates=True)
 # %%
 from trading_gym.envs.stock import StocksEnv
-env = StocksEnv(df=df, max_shares=100, video_path="trading_gym/data/animation.mp4")
+env = StocksEnv(df=df, max_shares=100)
 # %%
 while not env._done:
     action = np.random.choice(env.legal_actions())
     env.step(action)
+# %%
+env.step(2)
 # %%
 env._plots[0].show()
 # %%
@@ -34,7 +36,6 @@ env.reset()
 # %%
 env.close()
 # %%
-env._orders.reset()
-# %%
 env.render()
-# TODO: Bug in selling and buying price and profit calculation
+# %%
+profit = env._orders.latest_profit

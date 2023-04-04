@@ -57,7 +57,7 @@ class StocksEnv(gym.Env):
         self._end_tick = len(self.df) - 1
         self._done = False
         self._current_tick = self._start_tick
-        self._total_reward_history = np.zeros(len(self.df), dtype=np.float64)
+        self._reward_history = np.zeros(len(self.df), dtype=np.float64)
         self._portfolio_values = np.array(
             [self._balance] * len(self.df), dtype=np.float64
         )
@@ -134,26 +134,22 @@ class StocksEnv(gym.Env):
 
     def _get_reward(self, action: Action, fee: float) -> float:
         """Get the reward for the current tick"""
-        reward = 1e-5
+        reward = 0.0
         # Keep track of the history of portfolio values
         current_value = self._balance + self._equity
         self._portfolio_values[self._current_tick] = current_value
         if action == Action.SELL:
-            reward += self._orders.latest_profit / (self._current_price * 100)
+            reward += self._orders.latest_profit / self._current_price
         elif action == Action.BUY:
-            reward -= fee / (self._current_price * 100)
+            reward -= fee / self._current_price
 
         if reward < 0:
             # Penalize the agent for selling at a loss
-            reward *= 0.5
+            reward *= 0.01
         # Update the env variables
-        self._total_reward += reward
-        if (
-            self._orders.latest_order
-            and self._orders.latest_order[0] == self._current_tick
-        ):
+        if action == Action.HOLD:
             return reward
-        self._total_reward_history[self._current_tick] = self._total_reward
+        self._reward_history[self._current_tick] = reward
 
         return reward
 
@@ -165,12 +161,15 @@ class StocksEnv(gym.Env):
         ):
             self._done = True
 
+        last_action = (
+            self._last_action
+        )  # Get the last action before we update the orders
         # Get the trade cost and fee
         cost, fee = self._orders.add(action, self._current_price, self._current_date)
         total_cost = round(cost + fee, 2)
         if action != Action.HOLD:
             # We are increasing the quantity for the last trade
-            if self._last_action == action:
+            if last_action == action:
                 self._balance = self._last_balance - total_cost
             else:
                 # We are making a new trade on a new day
@@ -197,7 +196,7 @@ class StocksEnv(gym.Env):
         self._done = False
         self._current_tick = self._start_tick
         self._portfolio_values[:] = self._balance
-        self._total_reward_history[:] = 0.0
+        self._reward_history[:] = 0.0
         self._plots.clear()
         self._orders.reset()
 
@@ -213,17 +212,17 @@ class StocksEnv(gym.Env):
         if not self._done:
             df = self.df.iloc[: self._current_tick]
             portfolio = self._portfolio_values[: self._current_tick]
-            rewards = self._total_reward_history[: self._current_tick]
+            rewards = np.cumsum(self._reward_history[: self._current_tick])
         else:
             df = self.df
             portfolio = self._portfolio_values
-            rewards = self._total_reward_history
+            rewards = np.cumsum(self._reward_history)
         chunk_size = len(df) // 180
         chunks = [
             df.iloc[i : i + len(df) // chunk_size]
             for i in range(0, len(df), len(df) // chunk_size)
         ]
-        futs = []
+        fut = []
         for chunk in chunks:
             start_row = chunk.index[0]
             end_row = chunk.index[-1]
@@ -234,14 +233,14 @@ class StocksEnv(gym.Env):
                 continue
             portfolio_values_chunk = portfolio[start_idx : end_idx + 1]
             reward_chunk = rewards[start_idx : end_idx + 1]
-            futs.append(
+            fut.append(
                 self._thread_pool.submit(
                     self._draw_plot, chunk, portfolio_values_chunk, reward_chunk
                 )
             )
 
         # Wait for all plots to be drawn
-        for fut in futs:
+        for fut in fut:
             fut.result()
 
         # Render the plot

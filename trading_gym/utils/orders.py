@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3 as sql
+from collections import deque
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,9 +18,13 @@ class OrderHandler:
 
     def __init__(self):
         self.conn: sql.Connection | None = None
-        self.positions = 0
-        self._latest_sell_date: str = ""
+        self._portfolio_orders: deque[str] = deque()
         self.latest_order: tuple[datetime, int, float, int, float] | None = None
+        self._latest_profit: tuple[float, float, float] = (
+            0.0,
+            0.0,
+            0.0,
+        )  # (profit, sell_tax, buy_tax)
         self._init_db()
 
     def _init_db(self):
@@ -57,55 +62,15 @@ class OrderHandler:
         cur.close()
 
     @property
+    def positions(self) -> int:
+        """Get the number of positions"""
+        return len(self._portfolio_orders)
+
+    @property
     def latest_profit(self) -> float:
         """Get the latest profit"""
-        if not self._latest_sell_date:
-            return 0.0
-        cur = self.conn.cursor()
-        cur.execute(
-            """
-            SELECT
-                SUM(profit) AS total_profit
-                FROM (
-                    SELECT
-                        -- Calculate profit from past buy orders
-                        (o_sell.price - o_buy.price) * MIN(o_sell.quantity, o_buy.quantity)
-                         - o_buy.trade_fee - o_sell.trade_fee AS profit,
-                        -- Count the number of shares sold from this buy order
-                        SUM(MIN(o_sell.quantity, o_buy.quantity)) OVER
-                        (ORDER BY o_buy.date DESC) AS sold_quantity
-                    FROM
-                        (
-                            -- Subquery to filter the sell order
-                            SELECT *
-                            FROM orders
-                            WHERE date = ?
-                        ) AS o_sell
-                        INNER JOIN
-                        (
-                            -- Subquery to filter the buy orders
-                            SELECT *
-                            FROM orders INDEXED BY idx_orders_action
-                            WHERE action = 0
-                              AND quantity > 0
-                        ) AS o_buy
-                        ON o_buy.date < o_sell.date
-                    WHERE o_sell.action = 1
-                    ORDER BY o_buy.date DESC
-                ) AS profits
-                WHERE sold_quantity >= (
-                    SELECT quantity
-                    FROM orders
-                    WHERE date = ?
-                );
-            """,
-            (self._latest_sell_date, self._latest_sell_date),
-        )
-        res = cur.fetchone()
-        cur.close()
-        if not res:
-            return 0.0
-        return res[0] or 0.0
+        # Profit - Sell tax - Buy tax
+        return self._latest_profit[0] - self._latest_profit[1] - self._latest_profit[2]
 
     def add(self, action: Action, price: float, date: datetime) -> tuple[float, float]:
         """Add an order
@@ -129,13 +94,14 @@ class OrderHandler:
         ):
             fee = self.calc_tax(price, self.latest_order[3] + 1, action)
             with self.conn:
+                date = self.latest_order[0]
                 cur = self.conn.cursor()
                 cur.execute(
                     """
                     UPDATE orders
                     SET quantity = quantity + 1, trade_fee = ?
                     WHERE date = ?;""",
-                    (fee, self.latest_order[0].date().isoformat()),
+                    (fee, date.date().isoformat()),
                 )
                 self.latest_order = (
                     date,
@@ -160,15 +126,45 @@ class OrderHandler:
                 self.latest_order = date, action, price, qtn, fee
 
         if action == Action.BUY:
-            self.positions += 1
+            self._portfolio_orders.append(date.date().isoformat())
         elif action == Action.SELL:
-            self.positions -= 1
-            self._latest_sell_date = date.date().isoformat()
+            self.calc_profit()
+        if action != Action.SELL and self.latest_order[2] == Action.SELL:
+            # Reset the profit and tax if the latest order
+            # is a sell order and the current order is not a sell order
+            self._latest_profit = 0.0, 0.0, 0.0
         cost_without_fee = (
             price * self.latest_order[3] * (1 if action == Action.BUY else -1)
         )
 
         return cost_without_fee, fee
+
+    def calc_profit(self) -> None:
+        """Get the latest profit"""
+        # Sell order information
+        date, _, sell_price, _, sell_fee = self.latest_order
+
+        # Get the buy order information
+        buy_date = self._portfolio_orders.popleft()
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            SELECT price, trade_fee
+            FROM orders
+            WHERE date = ? AND action = ?;""",
+            (buy_date, int(Action.BUY)),
+        )
+        buy_price, buy_fee = cur.fetchone()
+        cur.close()
+
+        # Calculate the profit
+        profit = (sell_price - buy_price) + self._latest_profit[0]
+        buy_fee = (
+            buy_fee
+            if self._latest_profit[2] == buy_fee
+            else buy_fee + self._latest_profit[2]
+        )
+        self._latest_profit = profit, sell_fee, buy_fee
 
     @staticmethod
     def calc_tax(del_price: float, del_qty: int, action: Action) -> float:
@@ -231,4 +227,6 @@ class OrderHandler:
         """Reset the orders"""
         with self.conn:
             self.conn.cursor().execute("DELETE FROM orders WHERE 1")
-        self.positions = 0
+        self._portfolio_orders.clear()
+        self._latest_profit = 0.0, 0.0, 0.0
+        self.latest_order = None
