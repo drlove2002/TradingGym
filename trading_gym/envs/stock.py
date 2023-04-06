@@ -335,7 +335,8 @@ class StocksEnv(gym.Env):
         if (
             self._balance > 0
             and self._last_action != Action.SELL
-            and min(self.max_shares, self._balance // self._current_price) > 0
+            and self._balance // self._current_price > 0
+            and self._qtn < self.max_shares
         ):  # Buy action
             actions.append(int(Action.BUY))
 
