@@ -144,7 +144,7 @@ class StocksEnv(gym.Env):
 
         if reward < 0:
             # Penalize the agent for selling at a loss
-            reward *= 0.01
+            reward *= 1.01
         # Update the env variables
         if action == Action.HOLD:
             return reward
