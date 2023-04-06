@@ -129,7 +129,7 @@ class OrderHandler:
             self._portfolio_orders.append(date.date().isoformat())
         elif action == Action.SELL:
             self.calc_profit()
-        if action != Action.SELL and self.latest_order[2] == Action.SELL:
+        if action != Action.SELL:
             # Reset the profit and tax if the latest order
             # is a sell order and the current order is not a sell order
             self._latest_profit = 0.0, 0.0, 0.0
