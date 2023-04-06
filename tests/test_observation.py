@@ -24,18 +24,18 @@ else:
 from trading_gym.envs.stock import StocksEnv
 env = StocksEnv(df=df, max_shares=100)
 # %%
-while not env._done:
+done = False
+while not done:
     action = np.random.choice(env.legal_actions())
-    env.step(action)
+    _, _, terminated, truncated, _ = env.step(action)
+    done = terminated or truncated
 # %%
 env.step(2)
 # %%
-env._plots[0].show()
+env._plots[1].show()
 # %%
 env.reset()
 # %%
 env.close()
 # %%
 env.render()
-# %%
-profit = env._orders.latest_profit

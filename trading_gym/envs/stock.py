@@ -51,12 +51,10 @@ class StocksEnv(gym.Env):
         self._orders = OrderHandler()
         self._init_balance = initial_balance
         self._balance = self._last_balance = self._init_balance
-        self._total_reward = 0.0
         self._start_tick = 0
         self._end_tick = len(self.df) - 1
         self._done = False
         self._current_tick = self._start_tick
-        self._reward_history = np.zeros(len(self.df), dtype=np.float64)
         self._portfolio_values = np.array(
             [self._balance] * len(self.df), dtype=np.float64
         )
@@ -101,13 +99,6 @@ class StocksEnv(gym.Env):
         }
 
     @property
-    def _info(self):
-        """Get the info"""
-        return {
-            "total_reward": self._total_reward,
-        }
-
-    @property
     def _current_price(self):
         """Get the current price"""
         return self.df["Close"].iloc[self._current_tick]
@@ -145,11 +136,6 @@ class StocksEnv(gym.Env):
         if reward < 0:
             # Penalize the agent for selling at a loss
             reward *= 1.01
-        # Update the env variables
-        if action == Action.HOLD:
-            return reward
-        self._reward_history[self._current_tick] = reward
-
         return reward
 
     def step(self, action):
@@ -175,7 +161,6 @@ class StocksEnv(gym.Env):
 
         reward = self._get_reward(action, fee)
         observation = self._obs
-        info = self._info
 
         if self._current_tick < self._end_tick and action == Action.HOLD:
             # Move to the next tick
@@ -186,7 +171,7 @@ class StocksEnv(gym.Env):
             reward,
             self._current_tick >= self._end_tick,
             self._done,
-            info,
+            None,
         )
 
     def reset(self, seed=None, options=None):
@@ -195,17 +180,14 @@ class StocksEnv(gym.Env):
 
         self._episode += 1
         self._balance = self._last_balance = self._init_balance
-        self._total_reward = 0.0
         self._done = False
         self._current_tick = self._start_tick
         self._portfolio_values[:] = self._balance
-        self._reward_history[:] = 0.0
         self._plots.clear()
         self._orders.reset()
 
         observation = self._obs
-        info = self._info
-        return observation, info
+        return observation, None
 
     def render(self, mode="human"):
         """Render the stock chart with the current position"""
@@ -215,11 +197,9 @@ class StocksEnv(gym.Env):
         if not self._done:
             df = self.df.iloc[: self._current_tick]
             portfolio = self._portfolio_values[: self._current_tick]
-            rewards = np.cumsum(self._reward_history[: self._current_tick])
         else:
             df = self.df
             portfolio = self._portfolio_values
-            rewards = np.cumsum(self._reward_history)
         chunk_size = len(df) // 180
         chunks = [
             df.iloc[i : i + len(df) // chunk_size]
@@ -235,11 +215,8 @@ class StocksEnv(gym.Env):
             if end_idx - start_idx < 10:
                 continue
             portfolio_values_chunk = portfolio[start_idx : end_idx + 1]
-            reward_chunk = rewards[start_idx : end_idx + 1]
             fut.append(
-                self._thread_pool.submit(
-                    self._draw_plot, chunk, portfolio_values_chunk, reward_chunk
-                )
+                self._thread_pool.submit(self._draw_plot, chunk, portfolio_values_chunk)
             )
 
         # Wait for all plots to be drawn
@@ -250,9 +227,7 @@ class StocksEnv(gym.Env):
         for p in self._plots:
             p.show(warn=False)
 
-    def _draw_plot(
-        self, df: pd.DataFrame, portfolio_chunk: np.ndarray, reward_chunk: np.ndarray
-    ):
+    def _draw_plot(self, df: pd.DataFrame, portfolio_chunk: np.ndarray):
         """Draw the plot of the stock chart with the current position"""
 
         # Define plot styling options
@@ -267,9 +242,6 @@ class StocksEnv(gym.Env):
             mpf.make_addplot(df["RSI"], panel=2, color="mediumorchid"),
             mpf.make_addplot(
                 portfolio_chunk, panel=3, color="deepskyblue", ylabel="Portfolio Value"
-            ),
-            mpf.make_addplot(
-                reward_chunk, panel=4, color="dodgerblue", ylabel="Total Reward"
             ),
             mpf.make_addplot([30] * len(df), panel=2, color="r", type="line"),
             mpf.make_addplot([70] * len(df), panel=2, color="r", type="line"),
@@ -315,7 +287,7 @@ class StocksEnv(gym.Env):
             volume=True,
             addplot=plot_data,
             returnfig=True,
-            panel_ratios=(4, 1, 1, 1, 1),
+            panel_ratios=(4, 1, 1, 1),
             figsize=(10, 9),
         )
 
