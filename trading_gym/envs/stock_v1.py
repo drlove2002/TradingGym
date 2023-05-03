@@ -2,8 +2,6 @@ from concurrent import futures
 from typing import Literal, Optional
 
 import gymnasium as gym
-import matplotlib.pyplot as plt
-import mplfinance as mpf
 import numpy as np
 import pandas as pd
 from gymnasium import spaces
@@ -49,17 +47,13 @@ class StocksEnv(gym.Env):
 
         # episode
         self._episode = 0
-        self._plots: list[plt.Figure] = []
         self._orders = OrderHandler()
         self._init_balance = initial_balance
         self._balance = self._last_balance = self._init_balance
-        self._start_tick = 0
-        self._end_tick = len(self.df) - 1
+        self._start_tick = WINDOW_SIZE
+        self._end_tick = len(self.df) - WINDOW_SIZE
         self._done = False
         self._current_tick = self._start_tick
-        self._portfolio_values = np.array(
-            [self._balance] * len(self.df), dtype=np.float64
-        )
 
     def _process_data(self):
         """Process the data"""
@@ -142,8 +136,6 @@ class StocksEnv(gym.Env):
         """Get the reward for the current tick"""
         reward = 0.0
         # Keep track of the history of portfolio values
-        current_value = self._balance + self._equity
-        self._portfolio_values[self._current_tick] = current_value
         if action == Action.SELL:
             reward += self._orders.latest_profit / self._current_price
         elif action == Action.BUY:
@@ -157,12 +149,12 @@ class StocksEnv(gym.Env):
     def step(self, action):
         """Take a step in the environment"""
         # We are done if we blow up our balance by 50% or if we reach the end of the data
-        if (self._balance <= (self._init_balance * 0.5)) and (self._equity <= 0):
+        if (
+            self._current_tick + WINDOW_SIZE
+        ) >= self._end_tick or action == Action.SELL:
             self._done = True
 
-        last_action = (
-            self._last_action
-        )  # Get the last action before we update the orders
+        last_action = self._last_action
         # Get the trade cost and fee
         cost, fee = self._orders.add(action, self._current_price, self._current_date)
         total_cost = round(cost + fee, 2)
@@ -195,11 +187,10 @@ class StocksEnv(gym.Env):
         super().reset(seed=seed, options=options)
 
         self._episode += 1
-        self._balance = self._last_balance = self._init_balance
+        # self._balance = self._last_balance = self._init_balance
         self._done = False
-        self._current_tick = self._start_tick
-        self._portfolio_values[:] = self._balance
-        self._plots.clear()
+        # Set the current tick to a random point within the data frame
+        self._current_tick = np.random.randint(self._start_tick, self._end_tick)
         self._orders.reset()
 
         observation = self._obs
@@ -207,108 +198,6 @@ class StocksEnv(gym.Env):
 
     def render(self, mode="human"):
         """Render the stock chart with the current position"""
-        if mode != "human":
-            return
-
-        if not self._done:
-            df = self.df.iloc[: self._current_tick]
-            portfolio = self._portfolio_values[: self._current_tick]
-        else:
-            df = self.df
-            portfolio = self._portfolio_values
-        chunk_size = len(df) // 180
-        chunks = [
-            df.iloc[i : i + len(df) // chunk_size]
-            for i in range(0, len(df), len(df) // chunk_size)
-        ]
-        fut = []
-        for chunk in chunks:
-            start_row = chunk.index[0]
-            end_row = chunk.index[-1]
-            start_idx = df.index.get_loc(start_row)
-            end_idx = df.index.get_loc(end_row)
-            # Return when chunk is too small
-            if end_idx - start_idx < 10:
-                continue
-            portfolio_values_chunk = portfolio[start_idx : end_idx + 1]
-            fut.append(
-                self._thread_pool.submit(self._draw_plot, chunk, portfolio_values_chunk)
-            )
-
-        # Wait for all plots to be drawn
-        for fut in fut:
-            fut.result()
-
-        # Render the plot
-        for p in self._plots:
-            p.show(warn=False)
-
-    def _draw_plot(self, df: pd.DataFrame, portfolio_chunk: np.ndarray):
-        """Draw the plot of the stock chart with the current position"""
-
-        # Define plot styling options
-        mpl_style = mpf.make_mpf_style(
-            base_mpl_style="seaborn-darkgrid", facecolor="lightgrey", gridcolor="white"
-        )
-
-        # Plot candlestick chart with OHLCV data and overlay EMA, SMA, and Volume
-        plot_data = [
-            mpf.make_addplot(df["EMA"], color="mediumseagreen"),
-            mpf.make_addplot(df["SMA"], color="cornflowerblue"),
-            mpf.make_addplot(df["RSI"], panel=2, color="mediumorchid"),
-            mpf.make_addplot(
-                portfolio_chunk, panel=3, color="deepskyblue", ylabel="Portfolio Value"
-            ),
-            mpf.make_addplot([30] * len(df), panel=2, color="r", type="line"),
-            mpf.make_addplot([70] * len(df), panel=2, color="r", type="line"),
-        ]
-
-        # Mark buy and sell orders in the candlestick chart
-        buy_orders = self._orders.get(int(Action.BUY), df)
-        sell_orders = self._orders.get(int(Action.SELL), df)
-        # get high value for buy orders and low value for sell orders and nan if no order
-        if buy_orders.shape[0]:
-            # Get those buy orders which are not in the current chunk
-            buy_orders = df.loc[buy_orders, "Low"].reindex(df.index).values * 0.99
-            plot_data.append(
-                mpf.make_addplot(
-                    buy_orders,
-                    type="scatter",
-                    marker="^",
-                    markersize=100,
-                    color="green",
-                    panel=0,
-                    alpha=0.5,
-                )
-            )
-        if sell_orders.shape[0]:
-            sell_orders = df.loc[sell_orders, "High"].reindex(df.index).values * 1.01
-            plot_data.append(
-                mpf.make_addplot(
-                    sell_orders,
-                    type="scatter",
-                    marker="v",
-                    markersize=100,
-                    color="red",
-                    panel=0,
-                    alpha=0.5,
-                )
-            )
-
-        # Define figure size and subplot ratios
-        fig, axs = mpf.plot(
-            df,
-            style=mpl_style,
-            type="candle",
-            volume=True,
-            addplot=plot_data,
-            returnfig=True,
-            panel_ratios=(4, 1, 1, 1),
-            figsize=(10, 9),
-        )
-
-        self._plots.append(fig)
-        logger.info("Plot drawn for episode %s", self._episode)
 
     def close(self):
         """Close the environment"""

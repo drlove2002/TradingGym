@@ -18,3 +18,8 @@ register(
     entry_point="trading_gym.envs:StocksEnv",
     kwargs={"df": deepcopy(RELIANCE)},
 )
+register(
+    id="stocks-v1",
+    entry_point="trading_gym.envs:StocksEnvV1",
+    kwargs={"df": deepcopy(RELIANCE)},
+)

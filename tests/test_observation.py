@@ -22,7 +22,7 @@ else:
     df = pd.read_csv(data_path, index_col=0, parse_dates=True)
 # %%
 from trading_gym.envs.stock import StocksEnv
-env = StocksEnv(df=df, max_shares=100)
+env = StocksEnv(df=df)
 # %%
 done = False
 while not done:
