@@ -25,6 +25,7 @@ class StocksEnv(gym.Env):
         *,
         initial_balance: float = 10_000.0,
         feature_size: int = 8,
+        df_scaled: Optional[pd.DataFrame] = None,
     ):
         """
         Stock trading environment
@@ -32,7 +33,7 @@ class StocksEnv(gym.Env):
         """
         super().__init__()
         self.df = df
-        self.df_scaled: pd.DataFrame | None = None
+        self.df_scaled: pd.DataFrame | None = df_scaled
         self._process_data()
         self._thread_pool = futures.ThreadPoolExecutor(max_workers=4)
 
@@ -45,8 +46,11 @@ class StocksEnv(gym.Env):
                 "features": spaces.Box(
                     low=0,
                     high=1,
-                    shape=(feature_size * ((WINDOW_SIZE * 2) + 1),),
+                    shape=(feature_size * (WINDOW_SIZE + 1),),
                     dtype=np.float64,
+                ),
+                "future_price": spaces.Box(
+                    low=0, high=1, shape=(WINDOW_SIZE,), dtype=np.float64
                 ),
             }
         )
@@ -82,12 +86,15 @@ class StocksEnv(gym.Env):
             ind = Indicators(self.df).add_all()
             self.df = self.df.join(ind).dropna()
 
-        # scale the data using min max scaler
-        self.df_scaled = self.df.copy()
-        for col in self.df.columns:
-            col_min = self.df_scaled[col].min()
-            col_max = self.df_scaled[col].max()
-            self.df_scaled[col] = (self.df_scaled[col] - col_min) / (col_max - col_min)
+        if self.df_scaled is None:
+            # scale the data using min max scaler
+            self.df_scaled = self.df.copy()
+            for col in self.df.columns:
+                col_min = self.df_scaled[col].min()
+                col_max = self.df_scaled[col].max()
+                self.df_scaled[col] = (self.df_scaled[col] - col_min) / (
+                    col_max - col_min
+                )
 
     @property
     def _qtn(self) -> int:
@@ -107,16 +114,22 @@ class StocksEnv(gym.Env):
         """Get the observation"""
         features = (
             self.df_scaled.iloc[
-                self._current_tick - WINDOW_SIZE : self._current_tick + WINDOW_SIZE + 1
+                self._current_tick - WINDOW_SIZE : self._current_tick + 1
             ]
             .to_numpy()
             .flatten()
+        )
+        future_price = (
+            self.df_scaled["Close"]
+            .iloc[self._current_tick + 1 : self._current_tick + WINDOW_SIZE + 1]
+            .to_numpy()
         )
         return {
             "balance": np.array([self._balance], dtype=np.float32),
             "equity": np.array([self._equity], dtype=np.float32),
             "quantity": self._qtn,
             "features": features,
+            "future_price": future_price,
         }
 
     @property
