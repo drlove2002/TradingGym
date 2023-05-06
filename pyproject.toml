@@ -1,6 +1,5 @@
 [tool.semantic_release]
 version_variable = "trading_gym/__init__.py:__version__"
-version_source = "tag"
 upload_to_pypi = false
 upload_to_release = false
 changelog_sections = "refactor, style, docs, breaking, feature, fix"
