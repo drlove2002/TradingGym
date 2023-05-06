@@ -18,7 +18,7 @@ with open("requirements.txt") as f:
     requirements.extend(f.read().splitlines())
 
 readme = ""
-with open("README.rst") as f:
+with open("README.md") as f:
     readme = f.read()
 
 setup(
