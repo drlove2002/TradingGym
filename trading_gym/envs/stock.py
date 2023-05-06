@@ -53,8 +53,8 @@ class StocksEnv(gym.Env):
         self._orders = OrderHandler()
         self._init_balance = initial_balance
         self._balance = self._last_balance = self._init_balance
-        self._start_tick = 0
-        self._end_tick = len(self.df) - 1
+        self._start_tick = WINDOW_SIZE
+        self._end_tick = len(self.df) - WINDOW_SIZE
         self._done = False
         self._current_tick = self._start_tick
         self._portfolio_values = np.array(
@@ -108,8 +108,8 @@ class StocksEnv(gym.Env):
             .flatten()
         )
         return {
-            "balance": np.array([self._balance], dtype=np.uint32),
-            "equity": np.array([self._equity], dtype=np.uint32),
+            "balance": np.array([self._balance], dtype=np.float32),
+            "equity": np.array([self._equity], dtype=np.float32),
             "quantity": self._qtn,
             "features": features,
         }
@@ -187,7 +187,7 @@ class StocksEnv(gym.Env):
             reward,
             self._current_tick >= self._end_tick,
             self._done,
-            None,
+            {},
         )
 
     def reset(self, seed=None, options=None):
@@ -203,7 +203,7 @@ class StocksEnv(gym.Env):
         self._orders.reset()
 
         observation = self._obs
-        return observation, None
+        return observation, {}
 
     def render(self, mode="human"):
         """Render the stock chart with the current position"""

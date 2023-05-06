@@ -102,8 +102,8 @@ class StocksEnv(gym.Env):
             .flatten()
         )
         return {
-            "balance": np.array([self._balance], dtype=np.uint32),
-            "equity": np.array([self._equity], dtype=np.uint32),
+            "balance": np.array([self._balance], dtype=np.float32),
+            "equity": np.array([self._equity], dtype=np.float32),
             "quantity": self._qtn,
             "features": features,
         }
@@ -179,7 +179,7 @@ class StocksEnv(gym.Env):
             reward,
             self._current_tick >= self._end_tick,
             self._done,
-            None,
+            {},
         )
 
     def reset(self, seed=None, options=None):
@@ -194,7 +194,7 @@ class StocksEnv(gym.Env):
         self._orders.reset()
 
         observation = self._obs
-        return observation, None
+        return observation, {}
 
     def render(self, mode="human"):
         """Render the stock chart with the current position"""

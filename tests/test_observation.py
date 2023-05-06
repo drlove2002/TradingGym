@@ -21,7 +21,7 @@ if not os.path.exists(data_path):
 else:
     df = pd.read_csv(data_path, index_col=0, parse_dates=True)
 # %%
-from trading_gym.envs.stock import StocksEnv
+from trading_gym.envs import StocksEnv
 env = StocksEnv(df=df)
 # %%
 done = False
