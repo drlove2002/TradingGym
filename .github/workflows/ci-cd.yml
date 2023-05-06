@@ -39,7 +39,7 @@ jobs:
 #          pytest
 
   release:
-    if: github.event_name == 'push' && github.ref_name == 'main'
+    if: github.event_name == 'push' && github.ref_name == 'master'
 #    needs: test
     runs-on: ubuntu-latest
     concurrency: release

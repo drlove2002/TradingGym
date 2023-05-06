@@ -1,5 +1,5 @@
-matplotlib==3.7.1
-numpy==1.24.2
-pandas==1.5.3
-gymnasium==0.27.1
-colorama==0.4.6
+matplotlib
+numpy
+pandas
+gymnasium
+colorama
