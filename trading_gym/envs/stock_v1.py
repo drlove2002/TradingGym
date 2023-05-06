@@ -43,7 +43,7 @@ class StocksEnv(gym.Env):
                 "features": spaces.Box(
                     low=0,
                     high=1,
-                    shape=(feature_size * WINDOW_SIZE * 2,),
+                    shape=(feature_size * ((WINDOW_SIZE * 2) + 1),),
                     dtype=np.float64,
                 ),
             }
