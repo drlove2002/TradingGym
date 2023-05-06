@@ -22,6 +22,7 @@ class StocksEnv(gym.Env):
         df: pd.DataFrame,
         *,
         initial_balance: float = 10_000.0,
+        feature_size: int = 8,
     ):
         """
         Stock trading environment
@@ -40,7 +41,10 @@ class StocksEnv(gym.Env):
                 "equity": spaces.Box(low=0, high=INF, shape=(1,), dtype=np.float32),
                 "quantity": spaces.Discrete(2),
                 "features": spaces.Box(
-                    low=0, high=1, shape=(8 * WINDOW_SIZE * 2,), dtype=np.float64
+                    low=0,
+                    high=1,
+                    shape=(feature_size * WINDOW_SIZE * 2,),
+                    dtype=np.float64,
                 ),
             }
         )
