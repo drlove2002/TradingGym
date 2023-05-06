@@ -153,15 +153,15 @@ class StocksEnv(gym.Env):
     def _get_reward(self, action: Action, fee: float) -> float:
         """Get the reward for the current tick"""
         reward = 0.0
-        # Keep track of the history of portfolio values
         if action == Action.SELL:
-            reward += self._orders.latest_profit / self._current_price
+            profit = self._orders.latest_profit
+            reward += profit / self._current_price
+            if profit > 0:
+                # Reward the agent for selling at a profit
+                reward *= 1.5
         elif action == Action.BUY:
             reward -= fee / self._current_price
 
-        if reward < 0:
-            # Penalize the agent for selling at a loss
-            reward *= 1.01
         return reward
 
     def step(self, action):

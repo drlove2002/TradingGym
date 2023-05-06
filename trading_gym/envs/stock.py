@@ -163,13 +163,14 @@ class StocksEnv(gym.Env):
         current_value = self._balance + self._equity
         self._portfolio_values[self._current_tick] = current_value
         if action == Action.SELL:
-            reward += self._orders.latest_profit / self._current_price
+            profit = self._orders.latest_profit
+            reward += profit / self._current_price
+            if profit > 0:
+                # Reward the agent for selling at a profit
+                reward *= 1.5
         elif action == Action.BUY:
             reward -= fee / self._current_price
 
-        if reward < 0:
-            # Penalize the agent for selling at a loss
-            reward *= 1.01
         return reward
 
     def step(self, action):
