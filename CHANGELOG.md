@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v1.1.1 (2023-05-06)
+### Fix
+* **Env:** Datatype of obs should be float32 and info should be dict ([`fe6ef1b`](https://github.com/drlove2002/TradingGym/commit/fe6ef1b4b9cf6db446afbb23872d0b334e6b154c))
+
 ## v1.1.0 (2023-05-06)
 ### Refactor
 * **Reward:** Remove reward from plot/render ([`dbb4143`](https://github.com/drlove2002/TradingGym/commit/dbb414348993d039123e0da9c76ae0fefcfae865))
