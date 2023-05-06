@@ -78,8 +78,9 @@ class StocksEnv(gym.Env):
             self.df["Volume"] = 0
 
         # add indicators dataframe with the self.df
-        ind = Indicators(self.df).add_all()
-        self.df = self.df.join(ind).dropna()
+        if "RSI" not in self.df.columns:
+            ind = Indicators(self.df).add_all()
+            self.df = self.df.join(ind).dropna()
 
         # scale the data using min max scaler
         self.df_scaled = self.df.copy()
