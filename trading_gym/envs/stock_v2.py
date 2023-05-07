@@ -58,6 +58,7 @@ class StocksEnv(gym.Env):
         self._orders = OrderHandler()
         self._init_balance = initial_balance
         self._balance = self._last_balance = self._init_balance
+        self.total_reward = 0.0
         self._start_tick = WINDOW_SIZE
         self._end_tick = len(self.df) - WINDOW_SIZE
         self._done = False
@@ -157,15 +158,17 @@ class StocksEnv(gym.Env):
             profit = self._orders.latest_profit
             reward += profit
             if profit > 0:
-                # Reward the agent for selling at a profit
-                reward *= 1.5
+                if profit > 0:
+                    # Reward the agent for selling at a profit
+                    reward *= 2
         elif action == Action.BUY:
             reward -= fee
 
         if reward == 0:
             reward = -10
 
-        return reward / 100
+        self.total_reward += reward / 100
+        return self.total_reward
 
     def step(self, action):
         """Take a step in the environment"""
@@ -214,6 +217,7 @@ class StocksEnv(gym.Env):
         super().reset(seed=seed, options=options)
 
         self._episode += 1
+        self.total_reward = 0.0
         # self._balance = self._last_balance = self._init_balance
         self._done = False
         # Set the current tick to a random point within the data frame

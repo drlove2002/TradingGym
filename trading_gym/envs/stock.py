@@ -65,6 +65,7 @@ class StocksEnv(gym.Env):
         self._end_tick = len(self.df) - WINDOW_SIZE
         self._done = False
         self._current_tick = self._start_tick
+        self.total_reward = 0.0
         self._portfolio_values = np.array(
             [self._balance] * len(self.df), dtype=np.float64
         )
@@ -167,14 +168,15 @@ class StocksEnv(gym.Env):
             reward += profit
             if profit > 0:
                 # Reward the agent for selling at a profit
-                reward *= 1.5
+                reward *= 2
         elif action == Action.BUY:
             reward -= fee
 
         if reward == 0:
             reward = -10
 
-        return reward / 100
+        self.total_reward += reward / 100
+        return self.total_reward
 
     def step(self, action):
         """Take a step in the environment"""
@@ -186,7 +188,8 @@ class StocksEnv(gym.Env):
             self._done = True
 
         if action not in self.legal_actions():
-            return self._obs, -1, False, self._done, {}
+            self.total_reward -= 1
+            return self._obs, self.total_reward, False, self._done, {}
 
         last_action = (
             self._last_action
@@ -224,6 +227,7 @@ class StocksEnv(gym.Env):
 
         self._episode += 1
         self._balance = self._last_balance = self._init_balance
+        self.total_reward = 0.0
         self._done = False
         self._current_tick = self._start_tick
         self._portfolio_values[:] = self._balance
