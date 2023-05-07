@@ -192,7 +192,7 @@ class StocksEnv(gym.Env):
             self._done = True
 
         if action not in self.legal_actions():
-            return self._obs, -100, False, self._done, {}
+            return self._obs, -self._init_balance, False, self._done, {}
 
         last_action = (
             self._last_action
