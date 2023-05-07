@@ -14,12 +14,12 @@ from trading_gym.data import RELIANCE
 __version__ = "1.1.1"
 
 register(
-    id="stocks-v0",
+    id="stocks-v1",
     entry_point="trading_gym.envs:StocksEnv",
     kwargs={"df": deepcopy(RELIANCE)},
 )
 register(
-    id="stocks-v1",
-    entry_point="trading_gym.envs:StocksEnvV1",
+    id="stocks-v2",
+    entry_point="trading_gym.envs:StocksEnvV2",
     kwargs={"df": deepcopy(RELIANCE)},
 )

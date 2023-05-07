@@ -1,2 +1,2 @@
 from .stock import StocksEnv
-from .stock_v1 import StocksEnv as StocksEnvV1
+from .stock_v2 import StocksEnv as StocksEnvV2
