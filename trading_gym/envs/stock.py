@@ -57,6 +57,7 @@ class StocksEnv(gym.Env):
 
         # episode
         self._episode = 0
+        self.tick = 0
         self._plots: list[plt.Figure] = []
         self._orders = OrderHandler()
         self._init_balance = initial_balance
@@ -169,13 +170,13 @@ class StocksEnv(gym.Env):
             reward += profit
             if profit > 0:
                 # Reward the agent for selling at a profit
-                reward *= 2
+                reward *= 5
 
         if action == Action.BUY:
             reward -= fee
 
         if action == Action.HOLD:
-            reward -= 0.01 * (self._init_balance - current_value)
+            reward -= (0.1 * (self._init_balance - current_value)) + self.tick
 
         return reward
 
@@ -183,6 +184,8 @@ class StocksEnv(gym.Env):
         """Take a step in the environment"""
         if isinstance(action, Action):
             action = action.value
+
+        self.tick += 1
 
         # We are done if we blow up our balance by 50% or if we reach the end of the data
         if (self._balance <= (self._init_balance * 0.5)) and (self._equity <= 0):
@@ -228,6 +231,7 @@ class StocksEnv(gym.Env):
         self._episode += 1
         self._balance = self._last_balance = self._init_balance
         self._done = False
+        self.tick = 0
         self._current_tick = self._start_tick
         self._portfolio_values[:] = self._balance
         self._plots.clear()
