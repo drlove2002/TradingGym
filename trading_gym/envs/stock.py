@@ -186,7 +186,7 @@ class StocksEnv(gym.Env):
             self._done = True
 
         if action not in self.legal_actions():
-            return self._obs, -1, self._done, {}
+            return self._obs, -1, False, self._done, {}
 
         last_action = (
             self._last_action
@@ -213,7 +213,8 @@ class StocksEnv(gym.Env):
         return (
             observation,
             reward,
-            (self._current_tick >= self._end_tick) or self._done,
+            (self._current_tick >= self._end_tick),
+            self._done,
             {},
         )
 
