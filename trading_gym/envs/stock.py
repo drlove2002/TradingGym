@@ -164,20 +164,29 @@ class StocksEnv(gym.Env):
         self._portfolio_values[self._current_tick] = current_value
         if action == Action.SELL:
             profit = self._orders.latest_profit
-            reward += profit / self._current_price
+            reward += profit
             if profit > 0:
                 # Reward the agent for selling at a profit
                 reward *= 1.5
         elif action == Action.BUY:
-            reward -= fee / self._current_price
+            reward -= fee
 
-        return reward
+        if reward == 0:
+            reward = -10
+
+        return reward / 100
 
     def step(self, action):
         """Take a step in the environment"""
+        if isinstance(action, Action):
+            action = action.value
+
         # We are done if we blow up our balance by 50% or if we reach the end of the data
         if (self._balance <= (self._init_balance * 0.5)) and (self._equity <= 0):
             self._done = True
+
+        if action not in self.legal_actions():
+            return self._obs, -1, self._done, {}
 
         last_action = (
             self._last_action
@@ -204,8 +213,7 @@ class StocksEnv(gym.Env):
         return (
             observation,
             reward,
-            self._current_tick >= self._end_tick,
-            self._done,
+            (self._current_tick >= self._end_tick) or self._done,
             {},
         )
 
