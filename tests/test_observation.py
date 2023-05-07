@@ -30,6 +30,10 @@ while not done:
     _, _, terminated, truncated, _ = env.step(action)
     done = terminated or truncated
 # %%
+env.step(0)
+# %%
+env.step(1)
+# %%
 env.step(2)
 # %%
 env._plots[1].show()
