@@ -41,7 +41,7 @@ class StocksEnv(gym.Env):
         self.observation_space = spaces.Dict(
             {
                 "balance": spaces.Box(low=-INF, high=INF, shape=(1,), dtype=np.float32),
-                "equity": spaces.Box(low=0, high=INF, shape=(1,), dtype=np.float32),
+                "equity": spaces.Box(low=-INF, high=INF, shape=(1,), dtype=np.float32),
                 "quantity": spaces.Discrete(2),
                 "features": spaces.Box(
                     low=0,
