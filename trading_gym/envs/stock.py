@@ -219,7 +219,7 @@ class StocksEnv(gym.Env):
             reward,
             (self._current_tick >= self._end_tick),
             self._done,
-            {},
+            {"cost": cost, "fee": fee, "tick": self.tick},
         )
 
     def reset(self, seed=None, options=None):
