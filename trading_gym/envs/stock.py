@@ -26,6 +26,7 @@ class StocksEnv(gym.Env):
         initial_balance: float = 10_000.0,
         feature_size: int = 8,
         df_scaled: Optional[pd.DataFrame] = None,
+        show_fig: bool = True,
     ):
         """
         Stock trading environment
@@ -58,6 +59,7 @@ class StocksEnv(gym.Env):
         # episode
         self._episode = 0
         self.tick = 0
+        self.show_fig = show_fig
         self._plots: list[plt.Figure] = []
         self._orders = OrderHandler()
         self._init_balance = initial_balance
@@ -167,10 +169,7 @@ class StocksEnv(gym.Env):
 
         if action == Action.SELL:
             profit = self._orders.latest_profit
-            reward += profit
-            if profit > 0:
-                # Reward the agent for selling at a profit
-                reward *= 5
+            reward += profit * 5
 
         if action == Action.HOLD:
             reward -= ((self._init_balance - current_value) / self._init_balance) + (
@@ -272,6 +271,9 @@ class StocksEnv(gym.Env):
         # Wait for all plots to be drawn
         for fut in fut:
             fut.result()
+
+        if not self.show_fig:
+            return
 
         # Render the plot
         for p in self._plots:

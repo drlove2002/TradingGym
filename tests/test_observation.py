@@ -22,7 +22,7 @@ else:
     df = pd.read_csv(data_path, index_col=0, parse_dates=True)
 # %%
 from trading_gym.envs import StocksEnv
-env = StocksEnv(df=df)
+env = StocksEnv(df=df, show_fig=False)
 # %%
 done = False
 while not done:
@@ -44,3 +44,6 @@ env.reset()
 env.close()
 # %%
 env.render()
+# %%
+for i, p in enumerate(env._plots):
+    p.savefig(ROOT_DIR + f"/data/img/{i}.png")
