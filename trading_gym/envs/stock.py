@@ -60,7 +60,7 @@ class StocksEnv(gym.Env):
         self._episode = 0
         self.tick = 0
         self.show_fig = show_fig
-        self._plots: list[plt.Figure] = []
+        self.plots: list[plt.Figure] = []
         self._orders = OrderHandler()
         self._init_balance = initial_balance
         self._balance = self._last_balance = self._init_balance
@@ -232,7 +232,7 @@ class StocksEnv(gym.Env):
         self.tick = 0
         self._current_tick = self._start_tick
         self._portfolio_values[:] = self._balance
-        self._plots.clear()
+        self.plots.clear()
         self._orders.reset()
 
         observation = self._obs
@@ -276,7 +276,7 @@ class StocksEnv(gym.Env):
             return
 
         # Render the plot
-        for p in self._plots:
+        for p in self.plots:
             p.show(warn=False)
 
     def _draw_plot(self, df: pd.DataFrame, portfolio_chunk: np.ndarray):
@@ -343,7 +343,7 @@ class StocksEnv(gym.Env):
             figsize=(10, 9),
         )
 
-        self._plots.append(fig)
+        self.plots.append(fig)
         logger.info("Plot drawn for episode %s", self._episode)
 
     def close(self):

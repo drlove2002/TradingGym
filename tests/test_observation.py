@@ -37,7 +37,7 @@ env.step(1)
 # %%
 env.step(2)
 # %%
-env._plots[1].show()
+env.plots[1].show()
 # %%
 env.reset()
 # %%
@@ -45,5 +45,5 @@ env.close()
 # %%
 env.render()
 # %%
-for i, p in enumerate(env._plots):
+for i, p in enumerate(env.plots):
     p.savefig(ROOT_DIR + f"/data/img/{i}.png")
