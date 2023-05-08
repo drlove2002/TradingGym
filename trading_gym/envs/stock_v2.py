@@ -57,6 +57,7 @@ class StocksEnv(gym.Env):
         self._episode = 0
         self._orders = OrderHandler()
         self._init_balance = initial_balance
+        self.tick = 0
         self._balance = self._last_balance = self._init_balance
         self._start_tick = WINDOW_SIZE
         self._end_tick = len(self.df) - WINDOW_SIZE
@@ -157,16 +158,12 @@ class StocksEnv(gym.Env):
 
         if action == Action.SELL:
             profit = self._orders.latest_profit
-            reward += profit
-            if profit > 0:
-                # Reward the agent for selling at a profit
-                reward *= 2
-
-        if action == Action.BUY:
-            reward -= fee
+            reward += profit * 5
 
         if action == Action.HOLD:
-            reward -= 0.01 * (self._init_balance - current_value)
+            reward -= ((self._init_balance - current_value) / self._init_balance) + (
+                self.tick / self._end_tick
+            )
 
         return reward
 
@@ -174,6 +171,8 @@ class StocksEnv(gym.Env):
         """Take a step in the environment"""
         if isinstance(action, Action):
             action = action.value
+
+        self.tick += 1
 
         # We are done if we blow up our balance by 50% or if we reach the end of the data
         if (
@@ -209,7 +208,7 @@ class StocksEnv(gym.Env):
             reward,
             self._current_tick >= self._end_tick,
             self._done,
-            {},
+            {"cost": cost, "fee": fee, "tick": self.tick},
         )
 
     def reset(self, seed=None, options=None):
@@ -218,6 +217,7 @@ class StocksEnv(gym.Env):
 
         self._episode += 1
         # self._balance = self._last_balance = self._init_balance
+        self.tick = 0
         self._done = False
         # Set the current tick to a random point within the data frame
         self._current_tick = np.random.randint(self._start_tick, self._end_tick)
