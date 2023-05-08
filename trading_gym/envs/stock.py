@@ -173,7 +173,9 @@ class StocksEnv(gym.Env):
                 reward *= 5
 
         if action == Action.HOLD:
-            reward -= (0.1 * (self._init_balance - current_value)) + self.tick
+            reward -= ((self._init_balance - current_value) / self._init_balance) + (
+                self.tick / self._end_tick
+            )
 
         return reward
 

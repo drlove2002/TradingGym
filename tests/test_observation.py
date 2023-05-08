@@ -26,8 +26,9 @@ env = StocksEnv(df=df)
 # %%
 done = False
 while not done:
-    action = np.random.choice(env.legal_actions())
-    _, _, terminated, truncated, _ = env.step(action)
+    action = env.action_space.sample()
+    obs, reward, terminated, truncated, info = env.step(action)
+    print(reward)
     done = terminated or truncated
 # %%
 env.step(0)
