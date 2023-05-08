@@ -70,7 +70,9 @@ class OrderHandler:
     def latest_profit(self) -> float:
         """Get the latest profit"""
         # Profit - Sell tax - Buy tax
-        return self._latest_profit[0] - self._latest_profit[1] - self._latest_profit[2]
+        return self._latest_profit[
+            0
+        ]  # - self._latest_profit[1] - self._latest_profit[2]
 
     def add(self, action: Action, price: float, date: datetime) -> tuple[float, float]:
         """Add an order

@@ -172,9 +172,6 @@ class StocksEnv(gym.Env):
                 # Reward the agent for selling at a profit
                 reward *= 5
 
-        if action == Action.BUY:
-            reward -= fee
-
         if action == Action.HOLD:
             reward -= (0.1 * (self._init_balance - current_value)) + self.tick
 
@@ -192,7 +189,7 @@ class StocksEnv(gym.Env):
             self._done = True
 
         if action not in self.legal_actions():
-            return self._obs, -self._init_balance, False, self._done, {}
+            return self._obs, -10, False, self._done, {}
 
         last_action = (
             self._last_action
