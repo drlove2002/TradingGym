@@ -11,7 +11,7 @@ from gymnasium import register
 
 from trading_gym.data import RELIANCE
 
-__version__ = "1.1.1"
+__version__ = "1.2.0"
 
 register(
     id="stocks-v1",
