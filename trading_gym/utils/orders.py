@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sqlite3 as sql
-from collections import deque
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,14 +16,8 @@ class OrderHandler:
     """Order handler to keep track of past orders"""
 
     def __init__(self):
+        self._quantity = 0
         self.conn: sql.Connection | None = None
-        self._portfolio_orders: deque[str] = deque()
-        self.latest_order: tuple[datetime, int, float, int, float] | None = None
-        self._latest_profit: tuple[float, float, float] = (
-            0.0,
-            0.0,
-            0.0,
-        )  # (profit, sell_tax, buy_tax)
         self._init_db()
 
     def _init_db(self):
@@ -64,22 +57,18 @@ class OrderHandler:
     @property
     def positions(self) -> int:
         """Get the number of positions"""
-        return len(self._portfolio_orders)
+        return self._quantity
 
-    @property
-    def latest_profit(self) -> float:
-        """Get the latest profit"""
-        # Profit - Sell tax - Buy tax
-        return self._latest_profit[
-            0
-        ]  # - self._latest_profit[1] - self._latest_profit[2]
-
-    def add(self, action: Action, price: float, date: datetime) -> tuple[float, float]:
+    def add(
+        self, action: Action, quantity: int, price: float, date: datetime
+    ) -> tuple[float, float]:
         """Add an order
         Parameters
         ----------
         action : Action
             The action to take
+        quantity : int
+            The quantity of the order
         price : float
             The price of the order
         date : datetime
@@ -89,84 +78,23 @@ class OrderHandler:
             tuple(float, float)
                 The total cost and the total tax
         """
-        if (
-            action != Action.HOLD
-            and self.latest_order
-            and self.latest_order[1] == action
-        ):
-            fee = self.calc_tax(price, self.latest_order[3] + 1, action)
-            with self.conn:
-                date = self.latest_order[0]
-                cur = self.conn.cursor()
-                cur.execute(
-                    """
-                    UPDATE orders
-                    SET quantity = quantity + 1, trade_fee = ?
-                    WHERE date = ?;""",
-                    (fee, date.date().isoformat()),
-                )
-                self.latest_order = (
-                    date,
-                    action,
-                    price,
-                    self.latest_order[3] + 1,
-                    fee,
-                )
-        else:
-            if self.latest_order and self.latest_order[0] == date:
-                return 0.0, 0.0
-            fee = self.calc_tax(price, 1, action) if action != Action.HOLD else 0.0
-            qtn = 1 if action != Action.HOLD else 0
-            with self.conn:
-                cur = self.conn.cursor()
-                cur.execute(
-                    """
-                    INSERT INTO orders (date, action, price, quantity, trade_fee)
-                    VALUES (?, ?, ?, ?, ?)""",
-                    (date.date().isoformat(), int(action), price, qtn, fee),
-                )
-                self.latest_order = date, action, price, qtn, fee
+        fee = self.calc_tax(price, 1, action) if action != Action.HOLD else 0.0
+        with self.conn:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO orders (date, action, price, quantity, trade_fee)
+                VALUES (?, ?, ?, ?, ?)""",
+                (date.date().isoformat(), int(action), price, quantity, fee),
+            )
 
         if action == Action.BUY:
-            self._portfolio_orders.append(date.date().isoformat())
+            self._quantity += quantity
         elif action == Action.SELL:
-            self.calc_profit()
-        if action != Action.SELL:
-            # Reset the profit and tax if the latest order
-            # is a sell order and the current order is not a sell order
-            self._latest_profit = 0.0, 0.0, 0.0
-        cost_without_fee = (
-            price * self.latest_order[3] * (1 if action == Action.BUY else -1)
-        )
+            self._quantity -= quantity
+        cost_without_fee = price * quantity * (1 if action == Action.BUY else -1)
 
         return cost_without_fee, fee
-
-    def calc_profit(self) -> None:
-        """Get the latest profit"""
-        # Sell order information
-        date, _, sell_price, _, sell_fee = self.latest_order
-
-        # Get the buy order information
-        buy_date = self._portfolio_orders.popleft()
-        cur = self.conn.cursor()
-        cur.execute(
-            """
-            SELECT price, trade_fee
-            FROM orders
-            WHERE date = ? AND action = ?;""",
-            (buy_date, int(Action.BUY)),
-        )
-        buy_price, buy_fee = cur.fetchone()
-        cur.close()
-
-        # Calculate the profit
-        profit = (sell_price - buy_price) + self._latest_profit[0]
-        buy_fee = (
-            buy_fee
-            if self._latest_profit[2] == buy_fee
-            else buy_fee + self._latest_profit[2]
-        )
-        self._latest_profit = profit, sell_fee, buy_fee
 
     @staticmethod
     def calc_tax(del_price: float, del_qty: int, action: Action) -> float:
@@ -229,6 +157,3 @@ class OrderHandler:
         """Reset the orders"""
         with self.conn:
             self.conn.cursor().execute("DELETE FROM orders WHERE 1")
-        self._portfolio_orders.clear()
-        self._latest_profit = 0.0, 0.0, 0.0
-        self.latest_order = None

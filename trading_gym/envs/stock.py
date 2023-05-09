@@ -27,6 +27,7 @@ class StocksEnv(gym.Env):
         feature_size: int = 8,
         df_scaled: Optional[pd.DataFrame] = None,
         show_fig: bool = True,
+        max_quantity: int = 100,
     ):
         """
         Stock trading environment
@@ -38,17 +39,17 @@ class StocksEnv(gym.Env):
         self._process_data()
         self._thread_pool = futures.ThreadPoolExecutor(max_workers=4)
 
-        self.action_space = spaces.Discrete(len(Action))  # Buy, Sell, or Hold
+        self.action_space = spaces.Box(low=-1, high=1, shape=(1,), dtype=np.float32)
         self.observation_space = spaces.Dict(
             {
                 "balance": spaces.Box(low=-INF, high=INF, shape=(1,), dtype=np.float32),
                 "equity": spaces.Box(low=-INF, high=INF, shape=(1,), dtype=np.float32),
-                "quantity": spaces.Discrete(2),
+                "quantity": spaces.Discrete(max_quantity + 1),
                 "features": spaces.Box(
-                    low=0,
-                    high=1,
-                    shape=(feature_size * (WINDOW_SIZE + 1),),
-                    dtype=np.float64,
+                    low=0, high=1, shape=(feature_size,), dtype=np.float64
+                ),
+                "price_covariance": spaces.Box(
+                    low=0, high=1, shape=(1,), dtype=np.float64
                 ),
                 "future_price": spaces.Box(
                     low=0, high=1, shape=(WINDOW_SIZE,), dtype=np.float64
@@ -62,6 +63,7 @@ class StocksEnv(gym.Env):
         self.show_fig = show_fig
         self.plots: list[plt.Figure] = []
         self._orders = OrderHandler()
+        self._max_quantity = max_quantity
         self._init_balance = initial_balance
         self._balance = self._last_balance = self._init_balance
         self._start_tick = WINDOW_SIZE
@@ -115,23 +117,26 @@ class StocksEnv(gym.Env):
     @property
     def _obs(self):
         """Get the observation"""
-        features = (
-            self.df_scaled.iloc[
-                self._current_tick - WINDOW_SIZE : self._current_tick + 1
-            ]
-            .to_numpy()
-            .flatten()
-        )
+        data_lookback = self.df.iloc[
+            self._current_tick - WINDOW_SIZE : self._current_tick + 1
+        ]
+        price_lookback = data_lookback.pivot_table(index="Date", values="Close")
+        return_lookback = price_lookback.pct_change()
+        return_lookback = return_lookback.replace([np.inf, -np.inf], np.nan)
+        return_lookback = return_lookback.fillna(method="ffill").fillna(method="bfill")
+        price_covariance = return_lookback.cov().to_numpy().flatten()
         future_price = (
             self.df_scaled["Close"]
             .iloc[self._current_tick + 1 : self._current_tick + WINDOW_SIZE + 1]
             .to_numpy()
         )
+
         return {
             "balance": np.array([self._balance], dtype=np.float32),
             "equity": np.array([self._equity], dtype=np.float32),
             "quantity": self._qtn,
-            "features": features,
+            "features": self.df_scaled.iloc[self._current_tick].to_numpy().flatten(),
+            "price_covariance": price_covariance,
             "future_price": future_price,
         }
 
@@ -145,72 +150,57 @@ class StocksEnv(gym.Env):
         """Get the current date"""
         return self.df.index[self._current_tick]
 
-    @property
-    def _last_action(self) -> Optional[int]:
-        """Get the last order action"""
-        if self._orders.latest_order:
-            return self._orders.latest_order[1]
-        return None
-
-    @property
-    def _last_qtn(self) -> Optional[int]:
-        """Get the last order quantity"""
-        if self._orders.latest_order:
-            return self._orders.latest_order[3]
-        return None
-
-    def _get_reward(self, action: Action, fee: float) -> float:
+    def _get_reward(self, action: Action) -> float:
         """Get the reward for the current tick"""
         # Keep track of the history of portfolio values
         current_value = self._balance + self._equity
         self._portfolio_values[self._current_tick] = current_value
 
-        reward = 0.0
+        try:
+            latest_value = self._portfolio_values[self._current_tick - 1]
+        except IndexError:
+            latest_value = self._init_balance
 
-        if action == Action.SELL:
-            profit = self._orders.latest_profit
-            reward += profit * 5
+        if latest_value == 0:
+            return 0
 
-        if action == Action.HOLD:
-            reward -= ((self._init_balance - current_value) / self._init_balance) + (
-                self.tick / self._end_tick
-            )
+        if action != Action.HOLD:
+            return ((current_value - latest_value) * 1000) / latest_value
 
-        return reward
+        return -(
+            ((self._init_balance - current_value) / self._init_balance)
+            + (self.tick / self._end_tick)
+        )
 
     def step(self, action):
         """Take a step in the environment"""
-        if isinstance(action, Action):
-            action = action.value
 
+        action = self.get_legal_action(action)
+        if action == 0:
+            quantity = 0
+        else:
+            quantity = abs(action)
+            action = np.sign(action)
         self.tick += 1
 
         # We are done if we blow up our balance by 50% or if we reach the end of the data
         if (self._balance <= (self._init_balance * 0.5)) and (self._equity <= 0):
             self._done = True
 
-        if action not in self.legal_actions():
-            return self._obs, -10, False, self._done, {}
-
-        last_action = (
-            self._last_action
-        )  # Get the last action before we update the orders
         # Get the trade cost and fee
-        cost, fee = self._orders.add(action, self._current_price, self._current_date)
+        cost, fee = self._orders.add(
+            action, quantity, self._current_price, self._current_date
+        )
         total_cost = round(cost + fee, 2)
-        if action != Action.HOLD:
-            # We are increasing the quantity for the last trade
-            if last_action == action:
-                self._balance = self._last_balance - total_cost
-            else:
-                # We are making a new trade on a new day
-                self._last_balance = self._balance
-                self._balance -= total_cost
 
-        reward = self._get_reward(action, fee)
+        # We are making a new trade on a new day
+        self._last_balance = self._balance
+        self._balance -= total_cost
+
+        reward = self._get_reward(action)
         observation = self._obs
 
-        if self._current_tick < self._end_tick and action == Action.HOLD:
+        if self._current_tick < self._end_tick:
             # Move to the next tick
             self._current_tick += 1
 
@@ -355,23 +345,29 @@ class StocksEnv(gym.Env):
 
     def legal_actions(self):
         """Get the legal actions for the current tick"""
-        actions = []
+        actions = [0]
+        can_buy = (self._balance / self._current_price).astype(np.int64)
         if (
-            self._balance > 0
-            and self._last_action != Action.SELL
-            and self._balance // self._current_price > 0
-            and self._qtn == 0
-        ):  # Buy action
-            actions.append(int(Action.BUY))
+            self._balance > 0 and can_buy > 0 and self._qtn < self._max_quantity
+        ):  # Buy action, 1, 2, ..., self._balance // self._current_price
+            actions.extend(range(1, int(can_buy + 1)))
 
-        if self._qtn > 0 and self._last_action != Action.BUY:
-            # Sell action
-            actions.append(int(Action.SELL))
+        if self._qtn > 0:
+            # Sell actions, -qtn, -qtn+1, ..., -1
+            actions.extend(range(-1, -self._qtn - 1, -1))
 
-        actions.append(int(Action.HOLD))  # Hold action
+        actions.sort()
         return actions
 
+    def get_legal_action(self, regression_value):
+        legal_actions = self.legal_actions()
+        scaled_value = (regression_value + 1) / 2 * (len(legal_actions) - 1)
+        action_index = scaled_value.round().astype(np.int64)[0]
+        selected_action = legal_actions[action_index]
+
+        return selected_action
+
     @staticmethod
-    def action_to_string(action_number: Literal[0, 1, 2]):
+    def action_to_string(action_number: Literal[-1, 0, 1]):
         """Convert an action number to a string"""
         return str(Action._value2member_map_[action_number])

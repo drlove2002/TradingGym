@@ -2,9 +2,9 @@ from enum import IntEnum
 
 
 class Action(IntEnum):
-    BUY = 0
-    SELL = 1
-    HOLD = 2
+    BUY = 1
+    SELL = -1
+    HOLD = 0
 
     def __int__(self):
         return self.value
