@@ -31,11 +31,11 @@ while not done:
     print(reward)
     done = terminated or truncated
 # %%
-env.step(0)
+env.step(np.array([0], dtype=np.float32))
 # %%
-env.step(1)
+env.step(np.array([1], dtype=np.float32))
 # %%
-env.step(2)
+env.step(np.array([-1], dtype=np.float32))
 # %%
 env.plots[1].show()
 # %%
@@ -47,3 +47,5 @@ env.render()
 # %%
 for i, p in enumerate(env.plots):
     p.savefig(ROOT_DIR + f"/data/img/{i}.png")
+# %%
+env.observation_space.sample()

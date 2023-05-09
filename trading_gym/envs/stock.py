@@ -117,14 +117,13 @@ class StocksEnv(gym.Env):
     @property
     def _obs(self):
         """Get the observation"""
-        data_lookback = self.df.iloc[
+        price_lookback = self.df["Close"].iloc[
             self._current_tick - WINDOW_SIZE : self._current_tick + 1
         ]
-        price_lookback = data_lookback.pivot_table(index="Date", values="Close")
         return_lookback = price_lookback.pct_change()
         return_lookback = return_lookback.replace([np.inf, -np.inf], np.nan)
         return_lookback = return_lookback.fillna(method="ffill").fillna(method="bfill")
-        price_covariance = return_lookback.cov().to_numpy().flatten()
+        price_covariance = return_lookback.cov(return_lookback).flatten()
         future_price = (
             self.df_scaled["Close"]
             .iloc[self._current_tick + 1 : self._current_tick + WINDOW_SIZE + 1]
